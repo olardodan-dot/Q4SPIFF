@@ -256,8 +256,9 @@ function loadSpiffPdfFonts(){
  return spiffPdfFontPromise;
 }
 async function spiffPdfSvgImage(svg,color='#008FA6',portrait=false){
- const parsed=new DOMParser().parseFromString(svg,'image/svg+xml');if(parsed.querySelector('parsererror'))throw Error('Could not prepare the PDF artwork.');const root=parsed.documentElement;
- root.setAttribute('xmlns','http://www.w3.org/2000/svg');root.setAttribute('color',color);root.style.color=color;
+ const namespaced=svg.replace(/<svg\b([^>]*)>/,(tag,attrs)=>/\bxmlns\s*=/.test(attrs)?tag:'<svg xmlns="http://www.w3.org/2000/svg"'+attrs+'>');
+ const parsed=new DOMParser().parseFromString(namespaced,'image/svg+xml');if(parsed.querySelector('parsererror'))throw Error('Could not prepare the PDF artwork.');const root=parsed.documentElement;
+ root.setAttribute('color',color);root.setAttribute('style',(root.getAttribute('style')||'')+';color:'+color);
  const box=(root.getAttribute('viewBox')||'0 0 160 120').split(/\s+/).map(Number);
  if(portrait){root.setAttribute('viewBox','0 -32 100 144');root.setAttribute('width','200');root.setAttribute('height','288');}
  else{root.setAttribute('width',String(box[2]));root.setAttribute('height',String(box[3]));}
