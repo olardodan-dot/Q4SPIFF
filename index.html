@@ -212,16 +212,43 @@ document.querySelector('#applyImport').onclick=()=>{if(!editing||!pendingImport)
 document.querySelector('#saveDashboard').onclick=()=>{if(!editing)return;const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#spiff-data,#download-snapshot,.toast,.confetti').forEach(e=>e.remove());const data=document.createElement('script');data.id='spiff-data';data.type='application/json';data.textContent=JSON.stringify({id:Date.now().toString(36),state,teams,regionalDate}).replace(/</g,'\\u003c');const first=clone.querySelector('script');first.parentNode.insertBefore(data,first);clone.querySelectorAll('[data-i],#revenue').forEach(e=>e.setAttribute('readonly',''));clone.querySelectorAll('[data-team],#asof').forEach(e=>e.setAttribute('disabled',''));clone.querySelector('.race-admin').hidden=true;clone.querySelector('.race-admin').removeAttribute('open');clone.querySelector('#uploadDialog').removeAttribute('open');clone.querySelector('#importMessage').textContent='';clone.querySelector('#selectedUpload').textContent='Choose your filled-in .xlsx workbook or CSV template.';clone.querySelector('#unlockDialog').removeAttribute('open');clone.querySelector('#adminPassword').value='';clone.querySelector('#adminPassword').setAttribute('value','');clone.querySelector('#adminEmail').value='';clone.querySelector('#adminEmail').setAttribute('value','');clone.querySelector('#importPreview').hidden=true;clone.querySelector('#updateTools').hidden=true;clone.querySelector('body').classList.remove('editing');clone.querySelector('#editMode').textContent='🔒 Update numbers';clone.querySelector('#lockState').textContent='🔒 View mode · numbers locked';downloadBlob(new Blob(['<!doctype html>\n'+clone.outerHTML],{type:'text/html;charset=utf-8'}),'Q4_SPIFF_Updated_'+state.date+'.html')};
 
 
-// Print the live dashboard itself so PDF artwork and displayed values stay in sync.
+// Two measured print sheets use the current rendered dashboard and current values.
+async function printDashboardTwoPages(){
+ document.getElementById('dashboardPrintFrame')?.remove();
+ const frame=document.createElement('iframe');frame.id='dashboardPrintFrame';frame.title='Dashboard PDF preview';
+ frame.style.cssText='position:fixed;left:-20000px;top:0;width:1200px;height:1700px;border:0';
+ document.body.append(frame);
+ const doc=frame.contentDocument;
+ const styles=Array.from(document.querySelectorAll('style')).map(e=>e.outerHTML).join('');
+ const printStyle=document.getElementById('dashboard-actions-and-pdf').textContent;
+ const start=printStyle.indexOf('@media print{');
+ const printRules=printStyle.slice(start+'@media print{'.length,printStyle.lastIndexOf('}'));
+ doc.open();doc.write('<!doctype html><html><head><meta charset="utf-8"><title>Q4 SPIFF Dashboard</title>'+styles+'<style>'+printRules+`
+ @page{size:A3 portrait;margin:10mm}
+ html,body{margin:0!important;padding:0!important;width:277mm!important;background:white!important}
+ .pdf-sheet{width:277mm;height:398mm;position:relative;overflow:hidden;break-after:page;page-break-after:always}
+ .pdf-sheet:last-child{break-after:auto;page-break-after:auto}
+ .pdf-content{position:absolute;left:0;top:0;width:1120px;transform-origin:top left}
+ .pdf-content main{width:100%!important;box-sizing:border-box}
+ #raceArena{break-before:auto!important;page-break-before:auto!important;margin:0!important}
+ .pdf-content .lower{margin:0!important}.pdf-content button,.pdf-content .lockbar,.pdf-content footer,.pdf-content dialog{display:none!important}
+ </style></head><body><section class="pdf-sheet"><div class="pdf-content" id="pdfInstruments"></div></section><section class="pdf-sheet"><div class="pdf-content" id="pdfRace"></div></section></body></html>`);doc.close();
+ function copyWithValues(node){const copy=node.cloneNode(true);const original=node.querySelectorAll('input');copy.querySelectorAll('input').forEach((input,i)=>{input.value=original[i].value;input.setAttribute('value',original[i].value);input.readOnly=true;});return copy;}
+ const first=doc.getElementById('pdfInstruments');
+ first.append(copyWithValues(document.querySelector('header')),copyWithValues(document.querySelector('.ticker')));
+ const main=document.createElement('main');
+ for(const child of document.querySelector('main').children){if(child.classList.contains('lower'))break;if(!child.matches('dialog,footer'))main.append(copyWithValues(child));}
+ first.append(main);
+ const second=doc.getElementById('pdfRace'),raceMain=document.createElement('main');raceMain.append(copyWithValues(document.getElementById('raceArena')));second.append(raceMain);
+ if(doc.fonts?.ready)await doc.fonts.ready;
+ await Promise.all(Array.from(doc.images).map(img=>img.decode?img.decode().catch(()=>{}):Promise.resolve()));
+ for(const content of [first,second]){const sheet=content.parentElement;const scale=Math.min(sheet.clientWidth/content.scrollWidth,(sheet.clientHeight-4)/content.scrollHeight);content.style.transform='scale('+scale+')';}
+ frame.contentWindow.addEventListener('afterprint',()=>setTimeout(()=>frame.remove(),1000),{once:true});
+ frame.contentWindow.focus();frame.contentWindow.print();
+}
 document.querySelector('#downloadPDF').onclick=async()=>{
- const button=document.querySelector('#downloadPDF');
- button.disabled=true;
- try{
-  if(document.fonts?.ready)await document.fonts.ready;
-  await Promise.all(Array.from(document.images).map(img=>img.decode?img.decode().catch(()=>{}):Promise.resolve()));
-  window.print();
- }catch(e){alert('Print preview could not be opened. Try your browser’s Print menu and choose Save as PDF.');}
- finally{button.disabled=false;}
+ const button=document.querySelector('#downloadPDF');button.disabled=true;
+ try{await printDashboardTwoPages();}catch(e){document.getElementById('dashboardPrintFrame')?.remove();alert('PDF preview could not be opened: '+e.message);}finally{button.disabled=false;}
 };
 
 
